@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -32,99 +33,100 @@ public class JarMateyLauncher {
 	public static String containsNativesProperty = "containsNatives";
 	public static String containsExternalFilesProperty = "containsExternalFiles";
 
-	public static void main(String[] args) throws InterruptedException, IOException{ // CHANGED: Main method now accepts arguments, allowing the user to pass arguments to the main class within the self-extracting jar file.
+	public static void main(String[] args) throws InterruptedException, IOException { // CHANGED: Main method now
+																						// accepts arguments, allowing
+																						// the user to pass arguments to
+																						// the main class within the
+																						// self-extracting jar file.
 
 		File jarFile = new File(JarMateyLauncher.class.getProtectionDomain().getCodeSource().getLocation().getPath());
 
-		String fullJarPath = jarFile.getAbsolutePath().replaceAll("%20", " "); // CHANGED: Replaces "%20" with " " in the file path to allow for spaces in the file name.
-
+//		String fullJarPath = jarFile.getAbsolutePath().replaceAll("%20", " "); // CHANGED: Replaces "%20" with " " in
+																				// the file path to allow for spaces in
+																				// the file name.
+		String fullJarPath=URLDecoder.decode(jarFile.getAbsolutePath(),"UTF-8");
 		Properties properties = new Properties();
 		properties.load(JarMateyLauncher.class.getClassLoader().getResourceAsStream("JarMateyProperties.p"));
 
-		String nativesInJarDirectory =  properties.getProperty(JarMateyLauncher.nativesInJarDirectoryProperty);
+		String nativesInJarDirectory = properties.getProperty(JarMateyLauncher.nativesInJarDirectoryProperty);
 		String mainClass = properties.getProperty(JarMateyLauncher.mainClassProperty);
-		String externalFilesInJarDirectory = properties.getProperty(JarMateyLauncher.externalFilesInJarDirectoryProperty);
-
-	
-
-		
-
+		String externalFilesInJarDirectory = properties
+				.getProperty(JarMateyLauncher.externalFilesInJarDirectoryProperty);
 
 		boolean containsNatives = Boolean.valueOf(properties.getProperty(JarMateyLauncher.containsNativesProperty));
-		boolean containsExternalFiles = Boolean.valueOf(properties.getProperty(JarMateyLauncher.containsExternalFilesProperty));
+		boolean containsExternalFiles = Boolean
+				.valueOf(properties.getProperty(JarMateyLauncher.containsExternalFilesProperty));
 
 		boolean extractToTempDir = Boolean.valueOf(properties.getProperty(JarMateyLauncher.extractToTempDirProperty));
-
-
 
 		Set<String> libraryPaths = null;
 		String nativesDirectory = null;
 		List<String> addToClassPath = new ArrayList<String>();
-		if(containsNatives){
+		if (containsNatives) {
 			nativesDirectory = createAndReturnDir(extractToTempDir, nativesInJarDirectory);
-			libraryPaths = extractNativesAndReturnLibraryPaths(fullJarPath, nativesInJarDirectory, nativesDirectory, addToClassPath);
+			libraryPaths = extractNativesAndReturnLibraryPaths(fullJarPath, nativesInJarDirectory, nativesDirectory,
+					addToClassPath);
 		}
 
 		String externalFilesOnComputerDirectory = null;
-		if(containsExternalFiles){
+		if (containsExternalFiles) {
 			externalFilesOnComputerDirectory = createAndReturnDir(extractToTempDir, externalFilesInJarDirectory);
 			extractExternalFiles(fullJarPath, externalFilesInJarDirectory, externalFilesOnComputerDirectory);
 		}
 
 		List<String> processArgs = new ArrayList<String>();
 		processArgs.add("java");
-		if(properties.containsKey(JarMateyLauncher.jvmOptionsProperty)){
+		if (properties.containsKey(JarMateyLauncher.jvmOptionsProperty)) {
 			String jvmOptionsArray[] = properties.getProperty(JarMateyLauncher.jvmOptionsProperty).split("\\s");
 			processArgs.addAll(Arrays.asList(jvmOptionsArray));
 		}
-		
 
 		StringBuilder nativePathBuilder = new StringBuilder();
 		StringBuilder classpathBuilder = new StringBuilder(fullJarPath + System.getProperty("path.separator"));
-		if(containsNatives){
+		if (containsNatives) {
 
-			for(String path : libraryPaths){
+			for (String path : libraryPaths) {
 				nativePathBuilder.append(path);
 				nativePathBuilder.append(System.getProperty("path.separator"));
 			}
 
-			for(String s : addToClassPath){
+			for (String s : addToClassPath) {
 				classpathBuilder.append(s);
 				classpathBuilder.append(System.getProperty("path.separator"));
 			}
 
-			//processArgs.add("-Djava.library.path=" + nativesDirectory + ";" + nativesDirectory + "/"+System.getProperty("os.arch"));
+			// processArgs.add("-Djava.library.path=" + nativesDirectory + ";" +
+			// nativesDirectory + "/"+System.getProperty("os.arch"));
 			processArgs.add("-Djava.library.path=" + nativePathBuilder.toString());
 		}
 		processArgs.add("-cp");
 		processArgs.add(classpathBuilder.toString());
 		processArgs.add(mainClass);
-		
-		if(properties.containsKey(JarMateyLauncher.argsProperty)){ // FIXED: Copypasta error. Changed "JarMateyLauncher.jvmOptionsProperty" to "JarMateyLauncher.argsProperty".
+
+		if (properties.containsKey(JarMateyLauncher.argsProperty)) { // FIXED: Copypasta error. Changed
+																		// "JarMateyLauncher.jvmOptionsProperty" to
+																		// "JarMateyLauncher.argsProperty".
 			String argsArray[] = properties.getProperty(JarMateyLauncher.argsProperty).split("\\s");
 			processArgs.addAll(Arrays.asList(argsArray));
 		}
-		
-		if(args.length>0){ // ADDED: If the user has passed in arguments, add them to processArgs.
+
+		if (args.length > 0) { // ADDED: If the user has passed in arguments, add them to processArgs.
 			processArgs.addAll(Arrays.asList(args));
 		}
 
-		
+		ProcessBuilder pb = new ProcessBuilder(processArgs.toArray(new String[] {}));
 
-		ProcessBuilder pb = new ProcessBuilder(processArgs.toArray(new String[]{}));
+		// System.out.println(Arrays.toString(processArgs.toArray()));
 
-		//System.out.println(Arrays.toString(processArgs.toArray()));
-
-		if(containsExternalFiles){
+		if (containsExternalFiles) {
 			pb.directory(new File(externalFilesOnComputerDirectory));
 		}
 
-		try{
-			if(SplashScreen.getSplashScreen() != null){
+		try {
+			if (SplashScreen.getSplashScreen() != null) {
 				SplashScreen.getSplashScreen().close();
 			}
-		}
-		catch(Exception e){
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
@@ -138,32 +140,21 @@ public class JarMateyLauncher {
 
 		p.waitFor();
 
-
-
-
-
-
-		if(containsNatives){
+		if (containsNatives) {
 			deleteDir(new File(nativesDirectory));
 		}
 
-
-		if(containsExternalFiles){
+		if (containsExternalFiles) {
 			deleteDir(new File(externalFilesOnComputerDirectory));
 		}
 
-
-
-
-
 	}
 
-
-	public static String createAndReturnDir(boolean extractToTempDir, String jarMateyDir){
+	public static String createAndReturnDir(boolean extractToTempDir, String jarMateyDir) {
 
 		String parentDir = ".";
 
-		if(extractToTempDir){
+		if (extractToTempDir) {
 
 			String tempDir = System.getProperty("deployment.user.cachedir");
 
@@ -176,7 +167,7 @@ public class JarMateyLauncher {
 
 		int i = 0;
 		String fullNativeDir = parentDir + File.separator + jarMateyDir + i;
-		while(new File(fullNativeDir).exists()){
+		while (new File(fullNativeDir).exists()) {
 			i++;
 			fullNativeDir = parentDir + File.separator + jarMateyDir + i;
 		}
@@ -190,10 +181,10 @@ public class JarMateyLauncher {
 		return fullNativeDir;
 	}
 
-	public static void deleteDir(File nativeDir){
+	public static void deleteDir(File nativeDir) {
 
-		if(nativeDir.isDirectory()){
-			for(File f : nativeDir.listFiles()){
+		if (nativeDir.isDirectory()) {
+			for (File f : nativeDir.listFiles()) {
 				deleteDir(f);
 			}
 		}
@@ -201,13 +192,13 @@ public class JarMateyLauncher {
 		nativeDir.delete();
 	}
 
-	//x86_64
+	// x86_64
 
 	/**
 	 * Extract native files FROM the nativesInJarDirectory TO the workingDirectory.
 	 */
-	public static Set<String> extractNativesAndReturnLibraryPaths(String jar, String nativesInJarDirectory, String workingDirectory, List<String> addToClassPath) throws IOException{
-
+	public static Set<String> extractNativesAndReturnLibraryPaths(String jar, String nativesInJarDirectory,
+			String workingDirectory, List<String> addToClassPath) throws IOException {
 
 		String osName = System.getProperty("os.name").replaceAll("\\s", "").toLowerCase();
 		String osArch = System.getProperty("os.arch");
@@ -218,69 +209,59 @@ public class JarMateyLauncher {
 		Enumeration<JarEntry> entities = jarFile.entries();
 
 		while (entities.hasMoreElements()) {
-			JarEntry entry = (JarEntry)entities.nextElement();
+			JarEntry entry = (JarEntry) entities.nextElement();
 
 			boolean extractMe = false;
 
-			if ((!entry.isDirectory())){ //&& (entry.getName().indexOf('/') == -1)
-				if (isNativeFile(entry.getName(), nativesInJarDirectory)){
-
-
+			if ((!entry.isDirectory())) { // && (entry.getName().indexOf('/') == -1)
+				if (isNativeFile(entry.getName(), nativesInJarDirectory)) {
 
 					String fileToExtractTo = entry.getName().replaceFirst(nativesInJarDirectory + "/", "");
-
 
 					String[] pathSections = fileToExtractTo.split("/");
 
 					System.out.print("Path sections: ");
-					for(String s : pathSections){
+					for (String s : pathSections) {
 						System.out.print(s + " / ");
 					}
 
-					//os.name/os.arch/file
-					if(pathSections.length >= 2){
+					// os.name/os.arch/file
+					if (pathSections.length >= 2) {
 
-
-						//path contains an os name.. is it for the current system?
+						// path contains an os name.. is it for the current system?
 
 						String firstDir = pathSections[0];
 
 						String formattedFirstDir = firstDir.replaceAll("\\s", "").toLowerCase();
 
+						if (osName.startsWith(formattedFirstDir)) {
+							// os name matches current system
 
-						if(osName.startsWith(formattedFirstDir)){
-							//os name matches current system
-
-							if(pathSections.length >= 3){
-								//path contains an os arch.. is it for the current system?
+							if (pathSections.length >= 3) {
+								// path contains an os arch.. is it for the current system?
 
 								String secondDir = pathSections[1];
 
-								if(osArch.equals(secondDir)){
+								if (osArch.equals(secondDir)) {
 									extractMe = true;
 								}
-							}
-							else{
-								//path doesn't contain an os.arch, add it
+							} else {
+								// path doesn't contain an os.arch, add it
 								extractMe = true;
 							}
 
 						}
-					}
-					else{
+					} else {
 						extractMe = true;
 					}
 
-
-
-
-					if(extractMe){
+					if (extractMe) {
 						File file = new File(workingDirectory + File.separator + fileToExtractTo);
 						File parent = new File(file.getParent());
 						parent.mkdirs();
 
 						libraryPaths.add(parent.getAbsolutePath());
-						if(file.getName().toLowerCase().endsWith(".jar")){
+						if (file.getName().toLowerCase().endsWith(".jar")) {
 							addToClassPath.add(file.getAbsolutePath());
 						}
 
@@ -289,7 +270,7 @@ public class JarMateyLauncher {
 
 						byte[] buffer = new byte[65536];
 						int bufferSize;
-						while ((bufferSize = in.read(buffer, 0, buffer.length)) != -1){
+						while ((bufferSize = in.read(buffer, 0, buffer.length)) != -1) {
 							out.write(buffer, 0, bufferSize);
 						}
 
@@ -307,49 +288,49 @@ public class JarMateyLauncher {
 
 	public static boolean isNativeFile(String entryName, String nativesInJarDirectory) {
 
-		if(entryName.contains(nativesInJarDirectory)){
+		if (entryName.contains(nativesInJarDirectory)) {
 			return true;
-		}
-		else{
+		} else {
 			return false;
 		}
 
-		//		String osName = System.getProperty("os.name");
-		//		String name = entryName.toLowerCase();
+		// String osName = System.getProperty("os.name");
+		// String name = entryName.toLowerCase();
 		//
-		//		if (osName.startsWith("Win")) {
-		//			if (name.endsWith(".dll"))
-		//				return true;
-		//		}
-		//		else if (osName.startsWith("Linux")) {
-		//			if (name.endsWith(".so"))
-		//				return true;
-		//		}
-		//		else if (((osName.startsWith("Mac")) || (osName.startsWith("Darwin"))) && (
-		//				(name.endsWith(".jnilib")) || (name.endsWith(".dylib")))) {
-		//			return true;
-		//		}
+		// if (osName.startsWith("Win")) {
+		// if (name.endsWith(".dll"))
+		// return true;
+		// }
+		// else if (osName.startsWith("Linux")) {
+		// if (name.endsWith(".so"))
+		// return true;
+		// }
+		// else if (((osName.startsWith("Mac")) || (osName.startsWith("Darwin"))) && (
+		// (name.endsWith(".jnilib")) || (name.endsWith(".dylib")))) {
+		// return true;
+		// }
 		//
-		//		return false;
+		// return false;
 	}
 
-	public static void extractExternalFiles(String jar, String externalsInJarDirectory, String workingDirectory) throws IOException{
+	public static void extractExternalFiles(String jar, String externalsInJarDirectory, String workingDirectory)
+			throws IOException {
 
 		JarFile jarFile = new JarFile(jar, false);
 
 		Enumeration<JarEntry> entities = jarFile.entries();
 
 		while (entities.hasMoreElements()) {
-			JarEntry entry = (JarEntry)entities.nextElement();
+			JarEntry entry = (JarEntry) entities.nextElement();
 
-			if ((!entry.isDirectory())){ 
-				if (isExternalFile(entry.getName(), externalsInJarDirectory)){
+			if ((!entry.isDirectory())) {
+				if (isExternalFile(entry.getName(), externalsInJarDirectory)) {
 
 					String fileToExtractTo = entry.getName().replaceFirst(externalsInJarDirectory, "");
 
 					File file = new File(workingDirectory + File.separator + fileToExtractTo);
 					File parent = new File(file.getParent());
-					if(!parent.exists()){
+					if (!parent.exists()) {
 						parent.mkdirs();
 					}
 
@@ -358,7 +339,7 @@ public class JarMateyLauncher {
 
 					byte[] buffer = new byte[65536];
 					int bufferSize;
-					while ((bufferSize = in.read(buffer, 0, buffer.length)) != -1){
+					while ((bufferSize = in.read(buffer, 0, buffer.length)) != -1) {
 						out.write(buffer, 0, bufferSize);
 					}
 
@@ -372,15 +353,14 @@ public class JarMateyLauncher {
 	}
 
 	public static boolean isExternalFile(String entryName, String externalsInJarDirectory) {
-		if(entryName.contains(externalsInJarDirectory)){
+		if (entryName.contains(externalsInJarDirectory)) {
 			return true;
-		}
-		else{
+		} else {
 			return false;
 		}
 	}
 
-	public static void extractFile(String jar, String file) throws IOException{
+	public static void extractFile(String jar, String file) throws IOException {
 
 		JarFile jarFile = new JarFile(jar, false);
 
@@ -389,7 +369,7 @@ public class JarMateyLauncher {
 
 		byte[] buffer = new byte[65536];
 		int bufferSize;
-		while ((bufferSize = in.read(buffer, 0, buffer.length)) != -1){
+		while ((bufferSize = in.read(buffer, 0, buffer.length)) != -1) {
 			out.write(buffer, 0, bufferSize);
 		}
 
